@@ -12,21 +12,32 @@ const Login = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
   
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    console.log('Form submitted');
     
     if (!username || !password) {
       setError('Please enter username and password');
       return;
     }
     
-    // Always pass true for isAdmin in demo mode
-    const success = login(username, password, true);
+    console.log('Attempting login with:', { username, password, isAdminLogin });
+    setError('Logging in...');
     
-    if (success) {
-      navigate(isAdminLogin ? '/admin' : '/user');
-    } else {
-      setError('Invalid credentials');
+    try {
+      const success = await login(username, password, isAdminLogin);
+      console.log('Login result:', success);
+      
+      if (success) {
+        console.log('Login successful, navigating to:', isAdminLogin ? '/admin' : '/user');
+        navigate(isAdminLogin ? '/admin' : '/user');
+      } else {
+        console.log('Login failed');
+        setError('Invalid credentials');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Login failed: ' + (error.message || 'Unknown error'));
     }
   };
   

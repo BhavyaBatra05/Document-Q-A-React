@@ -3,8 +3,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import auth router
-from app.api.routes.auth import router as auth_router  # Import the existing auth router
+# Import all routers
+from app.api.routes.auth import router as auth_router
+from app.api.routes.documents import router as documents_router
+from app.api.routes.chats import router as chats_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -16,14 +18,17 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Your React frontend URL
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Your React frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# Include auth router
-app.include_router(auth_router)  # Add this line to include the auth router
+# Include all routers
+app.include_router(auth_router)
+app.include_router(documents_router)
+app.include_router(chats_router)
 
 # Root endpoint for testing
 @app.get("/")
@@ -33,6 +38,16 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.get("/api/v1/test-auth")
+def test_auth():
+    """Test endpoint that doesn't require authentication"""
+    return {
+        "message": "Auth API is working", 
+        "demo_users": ["admin", "user"],
+        "admin_password": "admin123",
+        "user_password": "user123"
+    }
 
 # Add the list-routes endpoint
 @app.get("/list-routes")

@@ -56,14 +56,38 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-# Login endpoint
+# Login endpoint supporting both JSON and form data
 @router.post("/login", response_model=Token)
-async def login_for_access_token(user_data: UserLogin):
-    print(f"Login attempt for user: {user_data.username}")
-    user = DEMO_USERS.get(user_data.username)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), user_data: UserLogin = None):
+    """
+    Login endpoint that accepts both form data (OAuth2) and JSON body
+    """
+    # Determine where to get credentials from
+    username = form_data.username if form_data and form_data.username else None
+    password = form_data.password if form_data and form_data.password else None
     
-    if not user or user["password"] != user_data.password:
-        print("Invalid credentials")
+    # If using JSON body instead of form
+    if user_data:
+        username = user_data.username
+        password = user_data.password
+    
+    print(f"Login attempt for user: {username}")
+    
+    print(f"Login attempt for user: {username}")
+    
+    # Validate credentials
+    user = DEMO_USERS.get(username)
+    
+    if not user:
+        print(f"User not found: {username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    if user["password"] != password:
+        print(f"Invalid password for user: {username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -73,11 +97,12 @@ async def login_for_access_token(user_data: UserLogin):
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user_data.username, "is_admin": user.get("is_admin", False)},
+        data={"sub": username, "is_admin": user.get("is_admin", False)},
         expires_delta=access_token_expires
     )
     
-    print(f"Login successful for user: {user_data.username}")
+    print(f"Login successful for user: {username}")
+    print(f"Generated token: {access_token}")
     return {"access_token": access_token, "token_type": "bearer"}
 
 # Get current user

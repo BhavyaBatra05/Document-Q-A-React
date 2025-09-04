@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Body
-from sqlalchemy.orm import Session
 from typing import List, Optional
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from bson import ObjectId
+from datetime import datetime
 
-from app.core.database import get_db
+from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.chat import Chat, Message
 from app.schemas.chat import ChatCreate, ChatResponse, MessageCreate, MessageResponse
-from app.api.deps import get_current_user
 
 router = APIRouter(
     prefix="/api/v1/chats",
@@ -16,7 +17,7 @@ router = APIRouter(
 @router.post("", response_model=ChatResponse)
 async def create_chat(
     chat_data: Optional[ChatCreate] = Body(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Create a new chat"""
@@ -29,76 +30,99 @@ async def create_chat(
         document_id=document_id
     )
     
-    db.add(chat)
-    db.commit()
-    db.refresh(chat)
+    # Insert chat into database
+    chat_dict = chat.dict(by_alias=True)
+    result = await db.chats.insert_one(chat_dict)
+    chat_id = result.inserted_id
     
     # Add initial welcome message
     welcome_message = Message(
-        chat_id=chat.id,
+        chat_id=chat_id,
         role="assistant",
         content="Hello! I'm your document assistant. How can I help you today?"
     )
     
-    db.add(welcome_message)
-    db.commit()
+    # Insert message into database
+    message_dict = welcome_message.dict(by_alias=True)
+    await db.messages.insert_one(message_dict)
     
-    # Return the chat with its messages
-    chat = db.query(Chat).filter(Chat.id == chat.id).first()
-    return chat
+    # Get the chat with messages
+    created_chat = await db.chats.find_one({"_id": chat_id})
+    messages = await db.messages.find({"chat_id": chat_id}).to_list(length=100)
+    
+    # Return as Chat model
+    chat_model = Chat(**created_chat)
+    chat_model.messages = [Message(**msg) for msg in messages]
+    
+    return chat_model
 
 @router.get("", response_model=List[ChatResponse])
 async def get_user_chats(
-    db: Session = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get all chats for the current user"""
-    chats = db.query(Chat).filter(Chat.user_id == current_user.id).all()
-    return chats
+    cursor = db.chats.find({"user_id": current_user.id})
+    chats_data = await cursor.to_list(length=100)
+    
+    # Get messages for each chat
+    result_chats = []
+    for chat_data in chats_data:
+        chat = Chat(**chat_data)
+        messages = await db.messages.find({"chat_id": chat.id}).to_list(length=100)
+        chat.messages = [Message(**msg) for msg in messages]
+        result_chats.append(chat)
+    
+    return result_chats
 
 @router.get("/{chat_id}", response_model=ChatResponse)
 async def get_chat(
-    chat_id: int = Path(...),
-    db: Session = Depends(get_db),
+    chat_id: str = Path(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific chat by ID"""
-    chat = db.query(Chat).filter(
-        Chat.id == chat_id,
-        Chat.user_id == current_user.id
-    ).first()
+    chat_data = await db.chats.find_one({
+        "_id": ObjectId(chat_id),
+        "user_id": current_user.id
+    })
     
-    if not chat:
+    if not chat_data:
         raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Get messages for this chat
+    chat = Chat(**chat_data)
+    messages = await db.messages.find({"chat_id": ObjectId(chat_id)}).to_list(length=100)
+    chat.messages = [Message(**msg) for msg in messages]
     
     return chat
 
 @router.post("/{chat_id}/messages", response_model=MessageResponse)
 async def send_message(
-    chat_id: int = Path(...),
+    chat_id: str = Path(...),
     message_data: MessageCreate = Body(...),
-    db: Session = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Send a message in a chat"""
     # Verify the chat exists and belongs to the user
-    chat = db.query(Chat).filter(
-        Chat.id == chat_id,
-        Chat.user_id == current_user.id
-    ).first()
+    chat_data = await db.chats.find_one({
+        "_id": ObjectId(chat_id),
+        "user_id": current_user.id
+    })
     
-    if not chat:
+    if not chat_data:
         raise HTTPException(status_code=404, detail="Chat not found")
     
     # Save user message
     user_message = Message(
-        chat_id=chat_id,
+        chat_id=ObjectId(chat_id),
         role="user",
         content=message_data.content
     )
     
-    db.add(user_message)
-    db.commit()
+    user_message_dict = user_message.dict(by_alias=True)
+    await db.messages.insert_one(user_message_dict)
     
     # Generate AI response (this is a simplified example)
     # In a real implementation, you would call your AI model here
@@ -106,21 +130,22 @@ async def send_message(
     
     # Save AI response
     ai_message = Message(
-        chat_id=chat_id,
+        chat_id=ObjectId(chat_id),
         role="assistant",
         content=ai_response
     )
     
-    db.add(ai_message)
-    db.commit()
-    db.refresh(ai_message)
+    ai_message_dict = ai_message.dict(by_alias=True)
+    result = await db.messages.insert_one(ai_message_dict)
     
-    return ai_message
+    # Get the created message
+    created_message = await db.messages.find_one({"_id": result.inserted_id})
+    return Message(**created_message)
 
 @router.post("/query", response_model=MessageResponse)
 async def query_document(
     query_data: dict = Body(...),
-    db: Session = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Query a document directly (without creating a chat)"""
@@ -139,24 +164,24 @@ async def query_document(
 
 @router.delete("/{chat_id}")
 async def delete_chat(
-    chat_id: int = Path(...),
-    db: Session = Depends(get_db),
+    chat_id: str = Path(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Delete a chat"""
-    chat = db.query(Chat).filter(
-        Chat.id == chat_id,
-        Chat.user_id == current_user.id
-    ).first()
+    # Verify the chat exists and belongs to the user
+    chat_data = await db.chats.find_one({
+        "_id": ObjectId(chat_id),
+        "user_id": current_user.id
+    })
     
-    if not chat:
+    if not chat_data:
         raise HTTPException(status_code=404, detail="Chat not found")
     
     # Delete associated messages
-    db.query(Message).filter(Message.chat_id == chat_id).delete()
+    await db.messages.delete_many({"chat_id": ObjectId(chat_id)})
     
     # Delete chat
-    db.delete(chat)
-    db.commit()
+    await db.chats.delete_one({"_id": ObjectId(chat_id)})
     
     return {"success": True}
