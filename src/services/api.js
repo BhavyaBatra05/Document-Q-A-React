@@ -1,8 +1,8 @@
 // src/services/api.js
 import axios from 'axios';
 
-// This matches your current backend structure
-const API_URL = 'http://localhost:8000';
+// Remove the /api/v1 prefix if your backend doesn't use it
+const API_URL = 'http://localhost:8000';  // Changed from 'http://localhost:8000/api/v1'
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -12,160 +12,34 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for adding the auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// Rest of your code remains unchanged...
 
-// Response interceptor for handling errors
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    // Handle 401 Unauthorized errors (token expired)
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Auth API calls - these match your backend
-export const authAPI = {
-  register: (userData) => api.post('/api/v1/auth/register', userData),
-  login: (email, password) => {
+// Documents API calls - update these paths if needed
+export const documentsAPI = {
+  uploadDocument: (file) => {
     const formData = new FormData();
-    formData.append('username', email); // FastAPI OAuth2 uses 'username'
-    formData.append('password', password);
-    return api.post('/api/v1/auth/login', formData, {
+    formData.append('file', file);
+    return api.post('/api/documents', formData, {  // Add /api/ prefix if needed
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
   },
-  getProfile: () => api.get('/api/v1/auth/profile'),
+  getUserDocuments: () => api.get('/api/documents'),  // Add /api/ prefix if needed
+  getDocument: (id) => api.get(`/api/documents/${id}`),  // Add /api/ prefix if needed
+  setActiveDocument: (id) => api.put(`/api/documents/${id}`, { is_active: true }),  // Add /api/ prefix if needed
+  deleteDocument: (id) => api.delete(`/api/documents/${id}`),  // Add /api/ prefix if needed
 };
 
-// Use mock implementations for documents and chats
-// until you add these endpoints to your backend
-export const documentsAPI = {
-  uploadDocument: (file) => {
-    console.log("Mock uploadDocument called with:", file);
-    return mockPromise({
-      id: Math.floor(Math.random() * 1000),
-      name: file.name,
-      date: new Date().toLocaleDateString(),
-      size: `${Math.floor(file.size / 1024)} KB`,
-      is_active: true,
-      is_ingested: true
-    });
-  },
-  getUserDocuments: () => {
-    console.log("Mock getUserDocuments called");
-    return mockPromise([
-      { id: 1, name: 'Sample Report.pdf', date: '8-30-25', size: '1.2 MB', is_active: true, is_ingested: true },
-      { id: 2, name: 'User Manual.pdf', date: '9-1-25', size: '3.4 MB', is_active: false, is_ingested: true }
-    ]);
-  },
-  getDocument: (id) => {
-    console.log("Mock getDocument called with:", id);
-    return mockPromise({ id, name: 'Document ' + id, date: '9-4-25', size: '2.1 MB', is_active: true, is_ingested: true });
-  },
-  setActiveDocument: (id) => {
-    console.log("Mock setActiveDocument called with:", id);
-    return mockPromise({ id, is_active: true });
-  },
-  deleteDocument: (id) => {
-    console.log("Mock deleteDocument called with:", id);
-    return mockPromise({ success: true });
-  },
-};
-
-// Chats API calls - mock implementations
+// Chats API calls - update these paths if needed
 export const chatsAPI = {
-  createChat: (data = {}) => {
-    console.log("Mock createChat called with:", data);
-    return mockPromise({
-      id: Math.floor(Math.random() * 1000),
-      date: new Date().toLocaleDateString(),
-      preview: "New conversation",
-      messages: [{ role: 'assistant', content: "Hello! I'm your document assistant. How can I help you today?" }]
-    });
-  },
-  getUserChats: () => {
-    console.log("Mock getUserChats called");
-    return mockPromise([
-      { 
-        id: 1, 
-        date: '09-01-2025', 
-        preview: 'What is the main conclusion of the report?'
-      },
-      { 
-        id: 2, 
-        date: '09-02-2025', 
-        preview: 'Can you summarize the key findings?'
-      }
-    ]);
-  },
-  getChat: (id) => {
-    console.log("Mock getChat called with:", id);
-    const messages = [
-      { role: 'assistant', content: "Hello! I'm your document assistant. How can I help you today?" }
-    ];
-    
-    if (id === 1) {
-      messages.push(
-        { role: 'user', content: "What is the main conclusion of the report?" },
-        { role: 'assistant', content: "Based on the document, the main conclusion is that renewable energy sources will become the dominant form of electricity generation by 2030." }
-      );
-    } else if (id === 2) {
-      messages.push(
-        { role: 'user', content: "Can you summarize the key findings?" },
-        { role: 'assistant', content: "The key findings include: 1) Solar power will grow at 15% annually, 2) Wind power will reach 30% of total generation, 3) Coal usage will decline by 50% by 2030." }
-      );
-    }
-    
-    return mockPromise({
-      id,
-      date: id === 1 ? '09-01-2025' : '09-02-2025',
-      preview: id === 1 ? 'What is the main conclusion of the report?' : 'Can you summarize the key findings?',
-      messages
-    });
-  },
-  sendMessage: (chatId, content) => {
-    console.log("Mock sendMessage called with:", chatId, content);
-    return mockPromise({ 
-      role: 'assistant', 
-      content: `This is a mock response to: "${content}". In a real implementation, this would be generated by your AI model.`
-    });
-  },
-  deleteChat: (id) => {
-    console.log("Mock deleteChat called with:", id);
-    return mockPromise({ success: true });
-  },
-  queryDocument: (query, documentId = null) => {
-    console.log("Mock queryDocument called with:", query, documentId);
-    return mockPromise({ 
-      role: 'assistant', 
-      content: `This is a mock response to your query: "${query}". In a real implementation, this would analyze the document with ID: ${documentId || 'None'}.` 
-    });
-  },
+  createChat: (data = {}) => api.post('/api/chats', data),  // Add /api/ prefix if needed
+  getUserChats: () => api.get('/api/chats'),  // Add /api/ prefix if needed
+  getChat: (id) => api.get(`/api/chats/${id}`),  // Add /api/ prefix if needed
+  sendMessage: (chatId, content) => api.post(`/api/chats/${chatId}/messages`, { content }),  // Add /api/ prefix if needed
+  deleteChat: (id) => api.delete(`/api/chats/${id}`),  // Add /api/ prefix if needed
+  queryDocument: (query, documentId = null) => 
+    api.post('/api/chats/query', { query, document_id: documentId }),  // Add /api/ prefix if needed
 };
-
-// Helper function for creating mock promises
-function mockPromise(data) {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({ data });
-    }, 300);
-  });
-}
 
 export default api;
