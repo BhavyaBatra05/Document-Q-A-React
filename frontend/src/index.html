@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Q&A System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="page">
+        <div class="login-container">
+            <div class="login-form">
+                <div class="login-header">
+                    <div class="document-icon">📄</div>
+                    <h1>Document Q&A System</h1>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <input type="text" id="username" class="form-control" placeholder="Username" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="adminLogin">
+                            <span class="checkmark"></span>
+                            Login as Admin
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="page hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="document-icon">📄</div>
+                <h1>Document Q&A System</h1>
+            </div>
+            <div class="header-right">
+                <span id="userInfo">Logged in: user</span>
+                <span id="timestamp">Saturday, September 06, 2025 - 11:00 AM IST</span>
+                <button id="adminBtn" class="btn btn--secondary btn--sm">Admin</button>
+                <button id="logoutBtn" class="btn btn--outline btn--sm">Logout</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Chat Interface -->
+            <div id="chatInterface" class="chat-section">
+                <div class="chat-controls">
+                    <div class="warning-message">
+                        <span class="warning-icon">⚠️</span>
+                        Please upload a document in Admin section to start
+                    </div>
+                    <button id="newChatBtn" class="btn btn--primary btn--sm">New Chat</button>
+                </div>
+                
+                <div class="chat-area">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message ai-message">
+                            <div class="message-avatar">🤖</div>
+                            <div class="message-content">
+                                <div class="message-text">Hello! I'm your AI assistant. Please upload a document to get started with questions and answers.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <input type="text" id="chatInput" class="form-control" placeholder="Type your question here..." disabled>
+                        <button id="sendBtn" class="btn btn--primary" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat History Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Chat History</h3>
+                </div>
+                <div class="chat-history" id="chatHistory">
+                    <div class="chat-item active">
+                        <div class="chat-title">Chat 1</div>
+                        <div class="chat-date">06-09-2025</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="page hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="document-icon">📄</div>
+                <h1>Document Q&A System</h1>
+            </div>
+            <div class="header-right">
+                <span id="adminUserInfo">Logged in: admin</span>
+                <span id="adminTimestamp">Saturday, September 06, 2025 - 11:00 AM IST</span>
+                <button id="backToChatBtn" class="btn btn--secondary btn--sm">Back to Chat</button>
+                <button id="adminLogoutBtn" class="btn btn--outline btn--sm">Logout</button>
+            </div>
+        </header>
+
+        <!-- Admin Content -->
+        <div class="admin-content">
+            <h2>Admin Dashboard</h2>
+            
+            <!-- System Status -->
+            <div class="admin-section">
+                <h3>System Status</h3>
+                <div class="status-cards">
+                    <div class="status-card">
+                        <div class="status-label">Documents Processed</div>
+                        <div class="status-value" id="documentsCount">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">System Health</div>
+                        <div class="status-value status--success">Healthy</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="admin-section">
+                <h3>Browse File</h3>
+                <div class="demo-mode">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="demoMode">
+                        <span class="checkmark"></span>
+                        Demo Mode
+                    </label>
+                </div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <div class="upload-icon">📁</div>
+                        <p>Drag and drop file here</p>
+                        <p class="upload-or">or</p>
+                        <button id="browseBtn" class="btn btn--outline">Browse files</button>
+                        <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                    </div>
+                    <div class="upload-restrictions">
+                        Limit 200MB per file • PDF, DOCX, TXT
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Files Section -->
+            <div class="admin-section">
+                <h3>User Specific Uploaded Files</h3>
+                <div class="files-container" id="filesContainer">
+                    <div class="no-files-message">No files uploaded yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
