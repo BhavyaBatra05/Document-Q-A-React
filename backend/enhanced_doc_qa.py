@@ -25,6 +25,7 @@ import time
 from dotenv import load_dotenv
 from typing import TypedDict
 import re
+import torch
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -225,9 +226,10 @@ def has_visual_content_comprehensive(file_path: str) -> Dict[str, Any]:
 
 # ====== BATCH VLM PROCESSOR ======
 class BatchVLMProcessor:
-    def __init__(self, vlm_processor, vlm_model, batch_size=5, max_workers=3):
+    def __init__(self, vlm_processor, vlm_model, device, batch_size=5, max_workers=3):
         self.vlm_processor = vlm_processor
         self.vlm_model = vlm_model
+        self.device=device
         self.batch_size = batch_size
         self.max_workers = max_workers
 
@@ -283,9 +285,20 @@ class BatchVLMProcessor:
             num_images = len(images)
             image_tokens = " ".join(["<image>"] * num_images)
             vlm_prompt = (
-                f"[INST] {image_tokens} Extract all visible text, tables (format as markdown tables), "
-                "and describe any images, figures, or charts from this document page. "
-                "Preserve the structure and formatting. [/INST]"
+            f"""[INST] {image_tokens}
+
+            Analyze this document page.
+            
+            1. Extract important visible text exactly as written whenever possible.
+            2. Describe diagrams, figures, charts, and images.
+            3. Summarize tables and their key contents.
+            4. Do not repeat information.
+            5. Do not invent information that is not visible.
+            6. If text is unreadable, say so instead of guessing.
+            
+            Provide a concise structured description of the page.
+            
+            [/INST]"""
             )
             
             vlm_output = None
@@ -317,7 +330,7 @@ class BatchVLMProcessor:
                     text=vlm_prompt,
                     images=images,
                     return_tensors="pt"
-                ).to(self.vlm_model.device)
+                ).to(self.device)
                 print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
                 print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
                 with torch.no_grad():
@@ -328,9 +341,8 @@ class BatchVLMProcessor:
                     
                     generation = self.vlm_model.generate(
                         **inputs,
-                        max_new_tokens=512,
-                        do_sample=True,
-                        temperature=0.1
+                        max_new_tokens=256,
+                        do_sample=False
                     )
                     
                     print(f"Generation took {time.time()-start:.2f} seconds")
@@ -348,7 +360,6 @@ class BatchVLMProcessor:
                     vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
                     # page_text = page_text.split('[/INST]', 1)[1].strip()
                 print(f"VLM output for page {page_num}:", repr(vlm_output))
-                results.append(f"--- PAGE {page_num} (VLM) ---\n{vlm_output}\n\n")
                 del inputs, generation
                 if hasattr(torch, 'cuda') and torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -460,7 +471,7 @@ class BatchVLMProcessor:
                         if 0 <= page_idx < total_pages:  # Ensure page index is valid
                             page = doc.load_page(page_idx)
                             # Render page to an image at a reasonable resolution
-                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better resolution
+                            pix = page.get_pixmap(matrix=fitz.Matrix(2,2))  #2x zoom for better resolution
 
                             # Convert pixmap to PIL Image
                             img_data = pix.samples
@@ -553,8 +564,9 @@ class SmartDocumentProcessor:
         self.llm = llm
         self.vlm_processor = vlm_processor
         self.vlm_model = vlm_model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.temp_dirs = []
-        self.batch_processor = BatchVLMProcessor(vlm_processor, vlm_model, batch_size, max_workers) if vlm_processor and vlm_model else None
+        self.batch_processor = BatchVLMProcessor(vlm_processor, vlm_model, self.device, batch_size, max_workers) if vlm_processor and vlm_model else None
 
     @contextmanager
     def temporary_directory(self):
@@ -1297,7 +1309,7 @@ def query_answerer(state: QAState) -> QAState:
 
         # Normal path continues here
         chunks = state["vectorstore"].retrieve_chunks(state["query"], k=6)
-        chunks = [increment_page_numbers(chunk) for chunk in chunks]
+        # chunks = [increment_page_numbers(chunk) for chunk in chunks]
         
         state["retrieved_chunks"] = chunks
 
@@ -1444,9 +1456,17 @@ if __name__ == "__main__":
     from langchain_google_genai import ChatGoogleGenerativeAI
     from transformers import AutoProcessor, AutoModelForVision2Seq
 
+    import torch
+    
     llm = ChatGoogleGenerativeAI(model='gemini-3.1-flash-lite', google_api_key=GEMINI_API_KEY)
     vlm_processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
     vlm_model = AutoModelForVision2Seq.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
+    
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    print(f"Using device: {device}")
+    vlm_model = vlm_model.to(device)
 
     # Expose models globally for agent functions
     globals()["llm"] = llm

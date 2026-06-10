@@ -162,10 +162,14 @@ async def load_ai_models():
                 "HuggingFaceTB/SmolVLM-256M-Instruct",
                 token=huggingface_key
             )
+            import torch
+            device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
             vlm_model = AutoModelForVision2Seq.from_pretrained(
                 "HuggingFaceTB/SmolVLM-256M-Instruct", 
                 token=huggingface_key
             )
+            vlm_model = vlm_model.to(device)
+            
             logger.info("✅ VLM models loaded successfully")
         except Exception as e:
             logger.warning(f"⚠️ Could not load VLM models: {e}")
