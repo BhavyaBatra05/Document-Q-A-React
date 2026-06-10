@@ -294,21 +294,47 @@ class BatchVLMProcessor:
             # VLM extraction (try/catch)            
             try:
                 print(f"Processing page {page_num} with VLM...") #TRYING
-                import torch
+                import torch  
+                import time 
+                
+                print("Torch CUDA:", torch.cuda.is_available())
+                print(
+                    "GPU Name:",
+                    torch.cuda.get_device_name(0)
+                    if torch.cuda.is_available()
+                    else "No GPU"
+                )
+                print("Torch version:", torch.__version__) 
+                print(
+                    "Model device:",
+                    next(self.vlm_model.parameters()).device
+                )   
+                processor_start = time.time()
+                
+                print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
+                
                 inputs = self.vlm_processor(
                     text=vlm_prompt,
                     images=images,
                     return_tensors="pt"
                 ).to(self.vlm_model.device)
+                print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
                 print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
                 with torch.no_grad():
                     print("Starting model generation...") #TRYING
+                    
+                    
+                    start = time.time()
+                    
                     generation = self.vlm_model.generate(
                         **inputs,
                         max_new_tokens=512,
                         do_sample=True,
                         temperature=0.1
                     )
+                    
+                    print(f"Generation took {time.time()-start:.2f} seconds")
+                print("Generation completed")
                 #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
                 # page_text = self.vlm_processor.decode(
                 #     generation[0],
@@ -1418,7 +1444,7 @@ if __name__ == "__main__":
     from langchain_google_genai import ChatGoogleGenerativeAI
     from transformers import AutoProcessor, AutoModelForVision2Seq
 
-    llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash', google_api_key=GEMINI_API_KEY)
+    llm = ChatGoogleGenerativeAI(model='gemini-3.1-flash-lite', google_api_key=GEMINI_API_KEY)
     vlm_processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
     vlm_model = AutoModelForVision2Seq.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
 

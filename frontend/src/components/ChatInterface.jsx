@@ -110,6 +110,11 @@ function ChatInterface({
     setLoading(true);
 
     try {
+      if (!activeSessionId) {
+        console.error("No active session ID");
+        return;
+      }
+
       const response = await apiService.queryDocument(
         messageToSend,
         activeSessionId,

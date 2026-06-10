@@ -40,22 +40,23 @@ function App() {
             setChatSessions(sessionsResp.sessions);
             setActiveSessionId(sessionsResp.sessions[0].sessionId);
           } else {
-            // Create first session only IF none exist
-            const newSessionId = `chat_${Date.now()}`;
-            setChatSessions([
-              {
-                sessionId: newSessionId,
-                createdAt: new Date(),
-                messages: [
-                  {
-                    role: "assistant",
-                    content: "Hello! I'm your document assistant. How can I help you today?",
-                    timestamp: new Date().toISOString(),
-                  },
-                ],
-              },
-            ]);
-            setActiveSessionId(newSessionId);
+            // // Create first session only IF none exist
+            // const newSessionId = `chat_${Date.now()}`;
+            // setChatSessions([
+            //   {
+            //     sessionId: newSessionId,
+            //     createdAt: new Date(),
+            //     messages: [
+            //       {
+            //         role: "assistant",
+            //         content: "Hello! I'm your document assistant. How can I help you today?",
+            //         timestamp: new Date().toISOString(),
+            //       },
+            //     ],
+            //   },
+            // ]);
+            // setActiveSessionId(newSessionId);
+            createInitialChat();
           }
         }
       } catch (err) {
@@ -70,8 +71,31 @@ function App() {
   }, []);
 
 
+  const createInitialChat = () => {
+    const newSessionId = `chat_${Date.now()}`;
+
+    setChatSessions([
+      {
+        sessionId: newSessionId,
+        createdAt: new Date(),
+        messages: [
+          {
+            role: "assistant",
+            content: "Hello! I'm your document assistant. How can I help you today?",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+    ]);
+
+    setActiveSessionId(newSessionId);
+
+    return newSessionId;
+  };
+
   const handleLogin = (userData) => {
     setUser(userData);
+    createInitialChat();
     setCurrentView("chat");
   };
 
@@ -109,30 +133,32 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-    return (
-      <>
-      {currentView === "admin" ? (
-      <AdminDashboard
-        user={user}
-        onBackToChat={handleBackToChat}
-        onLogout={handleLogout}
-        onActiveDocumentChange={handleActiveDocumentChange}
-      />
-      ):(
-      <ChatInterface
-      user={user}
-      onLogout={handleLogout}
-      onShowAdmin={handleShowAdmin}
-      activeDocument={activeDocument}
-      chatSessions={chatSessions}
-      setChatSessions={setChatSessions}
-      activeSessionId={activeSessionId}
-      setActiveSessionId={setActiveSessionId}
-      isDemoMode={isDemoMode}
-    />
-    )}
+  return (
+    <>
+      <div style={{ display: currentView === "admin" ? "block" : "none" }}>
+        <AdminDashboard
+          user={user}
+          onBackToChat={handleBackToChat}
+          onLogout={handleLogout}
+          onActiveDocumentChange={handleActiveDocumentChange}
+        />
+      </div>
+
+      <div style={{ display: currentView === "chat" ? "block" : "none" }}>
+        <ChatInterface
+          user={user}
+          onLogout={handleLogout}
+          onShowAdmin={handleShowAdmin}
+          activeDocument={activeDocument}
+          chatSessions={chatSessions}
+          setChatSessions={setChatSessions}
+          activeSessionId={activeSessionId}
+          setActiveSessionId={setActiveSessionId}
+          isDemoMode={isDemoMode}
+        />
+      </div>
     </>
-    );
+  );
   }
 
 export default App;

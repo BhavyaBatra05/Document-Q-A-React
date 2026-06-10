@@ -16,15 +16,16 @@ pydantic>=2.7.4,<3.0.0
 requests==2.31.0
 httpx>=0.25.2
 
-# Import your existing enhanced document processing system
-# These should match your existing requirements.txt exactly
-langgraph>=0.6.0
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-community>=0.3.0
-langchain-google-genai>=2.1.0
-langchain-huggingface>=0.1.0
-langchain-text-splitters>=0.3.0
+# LangChain / LangGraph family (pinned to a mutually-compatible set)
+# These are tightened to avoid long resolver backtracking. They match
+# `backend/constraints.txt` so pip can resolve quickly.
+langgraph==0.2.55
+langchain==0.3.20
+langchain-core==0.3.59
+langchain-community==0.3.19
+langchain-google-genai==2.1.4
+langchain-huggingface==0.1.2
+langchain-text-splitters==0.3.8
 
 # Vector Store and Embeddings
 sentence-transformers>=3.0.0
@@ -44,7 +45,7 @@ pytesseract>=0.3.10
 Pillow>=10.0.0
 
 # VLM Dependencies
-transformers>=4.45.0
+transformers>=4.45.0,<5.0.0
 torch>=2.0.0
 torchvision>=0.15.0
 accelerate>=0.30.0

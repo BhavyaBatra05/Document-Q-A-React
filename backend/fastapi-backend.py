@@ -146,7 +146,7 @@ async def load_ai_models():
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if gemini_api_key:
             llm = ChatGoogleGenerativeAI(
-                model='gemini-2.0-flash',
+                model='gemini-3.1-flash-lite',
                 google_api_key=gemini_api_key
             )
             logger.info("✅ Google Gemini LLM loaded successfully")

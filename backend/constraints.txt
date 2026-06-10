@@ -1,0 +1,11 @@
+# Constraints to stabilize LangChain family and speed up resolver
+# Use with: pip install -r requirements_fastapi.txt -c constraints.txt
+
+langgraph==0.2.55
+langchain==0.3.20
+langchain-core==0.3.59
+langchain-community==0.3.19
+langchain-google-genai==2.1.4
+langchain-huggingface==0.1.2
+langchain-text-splitters==0.3.8
+transformers>=4.45.0,<5.0.0
