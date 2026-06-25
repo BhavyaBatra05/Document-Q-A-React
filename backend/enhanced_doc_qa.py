@@ -25,6 +25,7 @@ import time
 from dotenv import load_dotenv
 from typing import TypedDict
 import re
+import pytesseract
 import torch
 
 load_dotenv()
@@ -280,118 +281,127 @@ class BatchVLMProcessor:
         print(f"VLM + OCR process_page_batch STARTING with {len(page_batch)} pages")  #TRYING
         results = []
         for page_num, page_img in page_batch:
-            # If you want to process multiple images, make a list here:
-            images = [page_img]  # Or more images if you have them for this page
-            num_images = len(images)
-            image_tokens = " ".join(["<image>"] * num_images)
-            vlm_prompt = (
-            f"""[INST] {image_tokens}
+        #     # If you want to process multiple images, make a list here:
+        #     images = [page_img]  # Or more images if you have them for this page
+        #     num_images = len(images)
+        #     image_tokens = " ".join(["<image>"] * num_images)
+        #     vlm_prompt = (f"""[INST] {image_tokens}
 
-            Analyze this document page.
+        #     Analyze this document page.
             
-            1. Extract important visible text exactly as written whenever possible.
-            2. Describe diagrams, figures, charts, and images.
-            3. Summarize tables and their key contents.
-            4. Do not repeat information.
-            5. Do not invent information that is not visible.
-            6. If text is unreadable, say so instead of guessing.
+        #     1. Extract important visible text exactly as written whenever possible.
+        #     2. Describe diagrams, figures, charts, and images.
+        #     3. Summarize tables and their key contents.
+        #     4. Do not repeat information.
+        #     5. Do not invent information that is not visible.
+        #     6. If text is unreadable, say so instead of guessing.
             
-            Provide a concise structured description of the page.
+        #     Provide a concise structured description of the page.
             
-            [/INST]"""
-            )
+        #     [/INST]"""
+        #     )
             
             vlm_output = None
             ocr_output = None
 
             # VLM extraction (try/catch)            
-            try:
-                print(f"Processing page {page_num} with VLM...") #TRYING
-                import torch  
-                import time 
+            # try:
+            #     print(f"Processing page {page_num} with VLM...") #TRYING
+            #     import torch  
+            #     import time 
                 
-                print("Torch CUDA:", torch.cuda.is_available())
-                print(
-                    "GPU Name:",
-                    torch.cuda.get_device_name(0)
-                    if torch.cuda.is_available()
-                    else "No GPU"
-                )
-                print("Torch version:", torch.__version__) 
-                print(
-                    "Model device:",
-                    next(self.vlm_model.parameters()).device
-                )   
-                processor_start = time.time()
+            #     print("Torch CUDA:", torch.cuda.is_available())
+            #     print(
+            #         "GPU Name:",
+            #         torch.cuda.get_device_name(0)
+            #         if torch.cuda.is_available()
+            #         else "No GPU"
+            #     )
+            #     print("Torch version:", torch.__version__) 
+            #     print(
+            #         "Model device:",
+            #         next(self.vlm_model.parameters()).device
+            #     )   
+            #     processor_start = time.time()
                 
-                print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
-                
-                inputs = self.vlm_processor(
-                    text=vlm_prompt,
-                    images=images,
-                    return_tensors="pt"
-                ).to(self.device)
-                print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
-                print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
-                with torch.no_grad():
-                    print("Starting model generation...") #TRYING
+            #     print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
+                            
+            #     inputs = self.vlm_processor(
+            #         text=vlm_prompt,
+            #         images=images,
+            #         return_tensors="pt"
+            #     ).to(self.device)
+            #     print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
+            #     print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
+            #     with torch.no_grad():
+            #         print("Starting model generation...") #TRYING
                     
                     
-                    start = time.time()
+            #         start = time.time()
                     
-                    generation = self.vlm_model.generate(
-                        **inputs,
-                        max_new_tokens=256,
-                        do_sample=False
-                    )
+            #         generation = self.vlm_model.generate(
+            #             **inputs,
+            #             max_new_tokens=256,
+            #             do_sample=False
+            #         )
                     
-                    print(f"Generation took {time.time()-start:.2f} seconds")
-                print("Generation completed")
-                #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
-                # page_text = self.vlm_processor.decode(
-                #     generation[0],
-                #     skip_special_tokens=True
+            #         print(f"Generation took {time.time()-start:.2f} seconds")
+                    
+                    
+            #     print("Generation completed")
+            #     #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
+            #     # page_text = self.vlm_processor.decode(
+            #     #     generation[0],
+            #     #     skip_special_tokens=True
                 
-                vlm_output = self.vlm_processor.decode(
-                    generation[0],
-                    skip_special_tokens=True
-                )
-                if '[/INST]' in vlm_output:
-                    vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
-                    # page_text = page_text.split('[/INST]', 1)[1].strip()
-                print(f"VLM output for page {page_num}:", repr(vlm_output))
-                del inputs, generation
-                if hasattr(torch, 'cuda') and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    print("CUDA memory cleared") #TRYING
-            except Exception as page_error:
-                print(f"VLM failed for page {page_num}: {page_error}")
+            #     generated_text = self.vlm_processor.batch_decode(
+            #         generation,
+            #         skip_special_tokens=True
+            #     )
+
+            #     vlm_output = generated_text[0]
+            #     if '[/INST]' in vlm_output:
+            #         vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
+            #         # page_text = page_text.split('[/INST]', 1)[1].strip()
+            #     print(f"VLM output for page {page_num}:", repr(vlm_output))
+            #     del inputs, generation
+            #     if hasattr(torch, 'cuda') and torch.cuda.is_available():
+            #         torch.cuda.empty_cache()
+            #         print("CUDA memory cleared") #TRYING
+            # except Exception as page_error:
+            #     print(f"VLM failed for page {page_num}: {page_error}")
                 
             
-                # try:
-                #     import pytesseract
-                #     print(f"Falling back to OCR for page {page_num}...") #TRYING
-                #     ocr_text = pytesseract.image_to_string(page_img)
-                #     print(f"OCR output for page {page_num}:", repr(ocr_text))
-                #     results.append(f"--- PAGE {page_num} (OCR Fallback) ---\n{ocr_text}\n\n")
-                # except Exception as ocr_error:
-                #     print(f"OCR failed for page {page_num}: {ocr_error}")
-                #     results.append(f"--- PAGE {page_num} (FAILED) ---\n[Page processing failed]\n\n")
+            
                 
             # OCR extraction (always runs for visual pages)
             try:
                 import pytesseract
-                ocr_output = pytesseract.image_to_string(page_img)
+                custom_config = r'--oem 3 --psm 6'
+
+                ocr_output = pytesseract.image_to_string(
+                    page_img,
+                    config=custom_config
+                )
+                
+                # TEMPORARY DEBUG
+                if page_num == 0:
+                    with open("page1_ocr.txt", "w", encoding="utf-8") as f:
+                        f.write(ocr_output)
+                
             except Exception as ocr_error:
                 print(f"OCR failed for page {page_num}: {ocr_error}")
 
             # Combine both outputs for hybrid chunk
-            combined = f"--- PAGE {page_num} (VLM) ---\n"
-            if vlm_output:
-                combined += vlm_output + "\n\n"
-            else:
-                combined += "[VLM processing failed]\n\n"
-            combined += f"--- PAGE {page_num} (OCR) ---\n"
+            # combined = f"--- PAGE {page_num} (VLM) ---\n"
+            # if vlm_output:
+            #     combined += vlm_output + "\n\n"
+            # else:
+            #     combined += "[VLM processing failed]\n\n"
+            # combined += f"--- PAGE {page_num} (OCR) ---\n"
+            
+            combined = ""
+            combined += f"--- PAGE {page_num+1} (OCR) ---\n"
             if ocr_output and ocr_output.strip():
                 combined += ocr_output.strip() + "\n\n"
             else:
