@@ -384,10 +384,6 @@ class BatchVLMProcessor:
                     config=custom_config
                 )
                 
-                # TEMPORARY DEBUG
-                if page_num == 0:
-                    with open("page1_ocr.txt", "w", encoding="utf-8") as f:
-                        f.write(ocr_output)
                 
             except Exception as ocr_error:
                 print(f"OCR failed for page {page_num}: {ocr_error}")
@@ -1002,7 +998,10 @@ class InMemoryVectorStore:
             if current_page:
                 pages.append(current_page.strip())
 
-            logger.info(f"Detected {len(pages)} pages before chunking.")    
+            logger.info(f"Detected {len(pages)} pages before chunking.")   
+            
+            if pages and not re.search(r"PAGE\s*-?\s*\d+", pages[0], re.IGNORECASE):
+                logger.info("Plain text document detected.") 
                   
             # Create chunks
             splitter = RecursiveCharacterTextSplitter(
@@ -1022,14 +1021,17 @@ class InMemoryVectorStore:
                 # Extract page number using regex
                 match = re.search(r"PAGE\s*-?\s*(\d+)", page_header, re.IGNORECASE)
 
-                if not match:
-                    logger.warning(f"Couldn't detect page number in header: {page_header}")
-                    continue
-                
-                page_number = int(match.group(1))
+                if match:
+                    page_number = int(match.group(1))
 
-                # Remaining lines are the actual page content
-                page_content = "\n".join(lines[1:]).strip()
+                    # Skip the PAGE header
+                    page_content = "\n".join(lines[1:]).strip()
+
+                else:
+                    page_number = 1
+
+                    # Keep every line because there is no PAGE header
+                    page_content = "\n".join(lines).strip()
 
                 if not page_content:
                     continue
@@ -1042,7 +1044,12 @@ class InMemoryVectorStore:
                         }
                     )
                 )
-
+            if not documents:
+                return {
+                    "success": False,
+                    "error": "No document chunks were created."
+            }
+            
             # Split while preserving metadata
             split_documents = splitter.split_documents(documents)
 
