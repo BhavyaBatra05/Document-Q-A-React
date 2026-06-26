@@ -949,8 +949,9 @@ class InMemoryVectorStore:
         """Create in-memory vector store with dynamic parameters."""
         try:
             from langchain.text_splitter import RecursiveCharacterTextSplitter
-            from langchain.vectorstores import FAISS
+            from langchain_community.vectorstores import FAISS
             from langchain_huggingface import HuggingFaceEmbeddings
+            from langchain_core.documents import Document
         except ImportError as e:
             return {"success": False, "error": f"Vector dependencies missing: {e}"}
 
@@ -970,28 +971,8 @@ class InMemoryVectorStore:
                 chunk_overlap = 400  # 50% overlap
 
             logger.info(f"Using chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
-        # try:
-        #     from langchain.text_splitter import RecursiveCharacterTextSplitter
-        #     from langchain.vectorstores import FAISS  # Changed from Chroma to FAISS
-        #     from langchain_huggingface import HuggingFaceEmbeddings
-        # except ImportError as e:
-        #     return {"success": False, "error": f"Vector dependencies missing: {e}"}
-
-        # try:
-        #     # Dynamic chunk size based on document length
-        #     doc_length = len(text)
-        #     chunk_size = 500
-        #     chunk_overlap = 100
-        #     if doc_length < 2000:
-        #         chunk_size = max(50, doc_length // 2)
-        #         chunk_overlap = max(10, chunk_size // 10)
-        #     elif doc_length > 50000:
-        #         chunk_size = 1500
-        #         chunk_overlap = 200
-
-        #     logger.info(f"Using chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
+        
             def _clean_text_for_split(t: str) -> str:
-                import re
                 t = t.replace('|', '\t')
                 t = re.sub(r'[ \t]+', ' ', t)
                 t = re.sub(r'\n{3,}', '\n\n', t)
@@ -1004,7 +985,25 @@ class InMemoryVectorStore:
             # If short doc, make one bigger chunk
             if len(text) < 500:
                 chunk_size = max(100, len(text))
-                chunk_overlap = 0       
+                chunk_overlap = 0     
+                
+            # Split extracted text into pages
+            pages = []
+            current_page = ""
+
+            for line in text.splitlines():
+                if line.startswith("--- PAGE"):
+                    if current_page:
+                        pages.append(current_page.strip())
+                    current_page = line + "\n"
+                else:
+                    current_page += line + "\n"
+
+            if current_page:
+                pages.append(current_page.strip())
+
+            logger.info(f"Detected {len(pages)} pages before chunking.")    
+                  
             # Create chunks
             splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size,
@@ -1012,21 +1011,51 @@ class InMemoryVectorStore:
                 separators=["\n\n", "\n", ". ", " ", ""]
             )
 
-            self.chunks = splitter.split_text(text)
+            documents = []
 
-            logger.info(f"Text splitter produced {len(self.chunks)} chunks.")
-            if not self.chunks or len(self.chunks) == 0:
-                logger.error("No text chunks to create vector store! Extraction may have failed or document is empty.")
-                return {"success": False, "error": "No data found for embedding."}
+            for page in pages:
+                lines = page.splitlines()
 
-            # Create embeddings and in-memory vectorstore
+                # First line contains the page header
+                page_header = lines[0]
+
+                # Extract page number using regex
+                match = re.search(r"PAGE\s*-?\s*(\d+)", page_header, re.IGNORECASE)
+
+                if not match:
+                    logger.warning(f"Couldn't detect page number in header: {page_header}")
+                    continue
+                
+                page_number = int(match.group(1))
+
+                # Remaining lines are the actual page content
+                page_content = "\n".join(lines[1:]).strip()
+
+                if not page_content:
+                    continue
+                
+                documents.append(
+                    Document(
+                        page_content=page_content,
+                        metadata={
+                            "page": page_number
+                        }
+                    )
+                )
+
+            # Split while preserving metadata
+            split_documents = splitter.split_documents(documents)
+
+            self.chunks = [doc.page_content for doc in split_documents]
+
+            logger.info(f"Created {len(split_documents)} chunks with metadata.")
+
             embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/all-MiniLM-L6-v2"
             )
 
-            # Create FAISS index from documents
-            self.vectorstore = FAISS.from_texts(
-                self.chunks, 
+            self.vectorstore = FAISS.from_documents(
+                split_documents,
                 embeddings
             )
 
@@ -1056,8 +1085,24 @@ class InMemoryVectorStore:
                 }
             )
 
-            docs = retriever.get_relevant_documents(query)
-            return [doc.page_content for doc in docs]
+            docs_and_scores = self.vectorstore.similarity_search_with_score(
+                query,
+                k=min(k, len(self.chunks))
+            )
+
+            formatted_chunks = []
+
+            for doc, score in docs_and_scores:
+            
+                formatted_chunks.append(
+                    {
+                        "page": doc.metadata.get("page", "Unknown"),
+                        "content": doc.page_content,
+                        "score": float(score)
+                    }
+                )
+            
+            return formatted_chunks
 
         except Exception as e:
             logger.error(f"Chunk retrieval failed: {e}")
@@ -1081,13 +1126,29 @@ class HallucinationResistantAnswerer:
         # Check if LLM is available
         if not self.llm:
             return {
-                "answer": "AI model not available. Please configure your API keys to enable AI-powered answers. For now, here are the relevant document chunks:\n\n" + "\n\n---\n\n".join(context_chunks[:3]),
+                "answer": "AI model not available. Please configure your API keys to enable AI-powered answers. For now, here are the relevant document chunks:\n\n" + "\n\n---\n\n".join(chunk["content"] for chunk in context_chunks[:3]),
                 "confidence": 0.1,
                 "sources_used": len(context_chunks)
             }
 
         # Create numbered context
-        context = "\n\n".join(chunk for chunk in context_chunks)
+        context = "\n\n".join(
+            f"--- PAGE {chunk['page']} ---\n{chunk['content']}"
+            for chunk in context_chunks
+        )
+        
+        import re
+
+        # Extract unique page numbers from retrieved chunks
+        page_numbers = set()
+
+        page_numbers = sorted(
+            {
+                chunk["page"]
+                for chunk in context_chunks
+                if chunk["page"] != "Unknown"
+            }
+        )
 
         # Advanced anti-hallucination prompt
         enhanced_prompt = f"""You are a precise document analysis assistant. Your task is to answer questions using ONLY the provided context.
@@ -1121,6 +1182,7 @@ ANALYSIS AND ANSWER (cite sources and be precise):"""
                 "answer": answer,
                 "confidence": confidence,
                 "sources_used": len(context_chunks),
+                "sources": page_numbers,
                 "context_length": len(context)
             }
 
@@ -1132,7 +1194,52 @@ ANALYSIS AND ANSWER (cite sources and be precise):"""
                 "sources_used": 0
             }
 
-    def _estimate_confidence(self, answer: str, context_chunks: List[str], query: str) -> float:
+    def _calculate_groundedness(self, answer: str, context_chunks: List[dict]) -> float:
+        context_text = " ".join(
+            chunk["content"]
+                 for chunk in context_chunks
+        ).lower()
+        answer = answer.lower()
+        
+        context_text = re.sub(r"[^\w\s]", " ", context_text)
+        answer = re.sub(r"[^\w\s]", " ", answer)
+        
+        stop_words = {
+            "the","a","an","and","or","but",
+            "in","on","at","to","for","of",
+            "with","by"
+        }
+        answer_terms = {
+            word
+            for word in answer.split()
+            if word not in stop_words
+        }
+        context_terms = {
+            word
+            for word in context_text.split()
+            if word not in stop_words
+        }
+        
+        supported_terms = answer_terms & context_terms # intersection between answer_terms and context_terms
+        unsupported_terms = answer_terms - context_terms
+        GROUNDING_PENALTY_WEIGHT = 0.3
+        
+        support_ratio = (
+            len(supported_terms) / len(answer_terms)
+            if answer_terms else 0
+        )
+
+        penalty = (
+            len(unsupported_terms) / len(answer_terms)
+            if answer_terms else 0
+        )
+
+        groundedness = support_ratio - (GROUNDING_PENALTY_WEIGHT * penalty)
+        groundedness = max(0.0, min(1.0, groundedness)) #scaling
+        
+        return round(groundedness,2) 
+
+    def _estimate_confidence(self, answer: str, context_chunks: List[dict], query: str) -> float:
         """Estimate answer confidence based on multiple factors."""
         answer_lower = answer.lower()
 
@@ -1153,29 +1260,80 @@ ANALYSIS AND ANSWER (cite sources and be precise):"""
         has_citations = any(phrase in answer_lower for phrase in [
             "source", "according to", "states that", "mentions", "indicates"
         ])
+        
+        scores = [
+            chunk["score"]
+            for chunk in context_chunks
+            if "score" in chunk
+        ]
+        
+        # Use only the best 3 retrieved chunks
+        top_scores = sorted(scores)[:3]
+
+        avg_score = (
+            sum(top_scores) / len(top_scores)
+            if top_scores else 1.8
+        )
+
+        #After testing, the bestcase score was around 0.7, and the worst case was around 1.8. So we can use these as thresholds for confidence estimation.
+        GOOD_RETRIEVAL = 0.7
+        BAD_RETRIEVAL = 1.8
+        
+        retrieval_confidence = (
+            BAD_RETRIEVAL - avg_score
+        ) / (
+            BAD_RETRIEVAL - GOOD_RETRIEVAL
+        )
+
+        retrieval_confidence = max(
+            0.0,
+            min(1.0, retrieval_confidence)
+        )
+
 
         # Check context overlap
-        context_text = " ".join(context_chunks).lower()
+        context_text = " ".join(
+            chunk["content"]
+            for chunk in context_chunks
+        ).lower()
         query_lower = query.lower()
 
         # Extract key terms from query and answer
-        query_terms = set(query_lower.split()) - {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-        answer_terms = set(answer_lower.split()) - {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-        context_terms = set(context_text.split()) - {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
+        query_terms = set(query_lower.split()) - stop_words
+        answer_terms = set(answer_lower.split()) - stop_words
+        context_terms = set(context_text.split()) - stop_words
 
         # Calculate overlaps
         answer_context_overlap = len(answer_terms.intersection(context_terms)) / len(answer_terms) if answer_terms else 0
         query_answer_relevance = len(query_terms.intersection(answer_terms)) / len(query_terms) if query_terms else 0
 
         # Base confidence calculation
-        base_confidence = (answer_context_overlap * 0.6) + (query_answer_relevance * 0.4)
+        base_confidence = (answer_context_overlap * 0.5) + (query_answer_relevance * 0.5)
 
         # Boost for citations
         if has_citations:
             base_confidence = min(0.95, base_confidence * 1.2)
+            
+        if len(answer.split()) > 60:
+            base_confidence += 0.03    
+            
+         #Calculate groundedness score
+        groundedness = self._calculate_groundedness(answer,context_chunks)   
+        print("Groundedness:", groundedness)
+        # Blend retrieval quality
+        ANSWER_WEIGHT = 0.6
+        RETRIEVAL_WEIGHT = 0.4
+        GROUNDEDNESS_WEIGHT = 0.20
+        
+        base_confidence = (
+            base_confidence * ANSWER_WEIGHT +
+            retrieval_confidence * RETRIEVAL_WEIGHT
+            + groundedness * GROUNDEDNESS_WEIGHT
+        )
 
         # Ensure reasonable bounds
-        return max(0.2, min(0.95, base_confidence))
+        return round(max(0.15, min(0.95, base_confidence)),2)
 
 # LangGraph Agent Node Functions (updated with enhanced metadata detection)
 def document_extractor(state: QAState) -> QAState:

@@ -127,6 +127,7 @@ function ChatInterface({
         timestamp: new Date().toISOString(),
         confidence: response.confidence,
         sourcesUsed: response.sources_used,
+        sources: response.sources || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -234,7 +235,7 @@ function ChatInterface({
                   {message.confidence && (
                     <div className="message-meta">
                       🎯 Confidence: {(message.confidence * 100).toFixed(0)}%
-                      {message.sourcesUsed && <span className="sources"> 📚 Sources: {message.sourcesUsed} chunks used</span>}
+                      {message.sources && message.sources.length > 0 && <span className="sources"> 📚 Sources: {message.sources.map(page => `Page ${page}`).join(", ")}</span>}
                     </div>
                   )}
                   <div className="message-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</div>

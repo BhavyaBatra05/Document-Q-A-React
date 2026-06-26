@@ -522,6 +522,7 @@ async def query_document(request: QueryRequest, session: Dict[str, Any] = Depend
             answer = answer_result["answer"]
             confidence = answer_result["confidence"]
             sources_used = answer_result["sources_used"]
+            sources = answer_result.get("sources", [])
 
         if username not in chat_sessions:
             chat_sessions[username] = {}
@@ -541,6 +542,7 @@ async def query_document(request: QueryRequest, session: Dict[str, Any] = Depend
             "content": answer,
             "confidence": confidence,
             "sources_used": sources_used,
+            "sources": sources,
             "timestamp": datetime.now().isoformat(),
         })
 
@@ -548,6 +550,7 @@ async def query_document(request: QueryRequest, session: Dict[str, Any] = Depend
             "answer": answer,
             "confidence": confidence,
             "sources_used": sources_used,
+            "sources": sources,
             "chunks_retrieved": len(chunks),
         }
     except Exception as e:
