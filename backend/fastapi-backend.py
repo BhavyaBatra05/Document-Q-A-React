@@ -295,7 +295,7 @@ async def process_document(task_id: str, file_path: str, filename: str):
             vlm_processor=vlm_processor,
             vlm_model=vlm_model,
             batch_size=5,
-            max_workers=3
+            max_workers=1
         )
         
         processing_tasks[task_id]["progress"] = 20.0

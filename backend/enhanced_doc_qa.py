@@ -24,7 +24,6 @@ import gc
 import time
 from dotenv import load_dotenv
 from typing import TypedDict
-import re
 import pytesseract
 import torch
 
@@ -227,156 +226,108 @@ def has_visual_content_comprehensive(file_path: str) -> Dict[str, Any]:
 
 # ====== BATCH VLM PROCESSOR ======
 class BatchVLMProcessor:
-    def __init__(self, vlm_processor, vlm_model, device, batch_size=5, max_workers=3):
+    def __init__(self, vlm_processor, vlm_model, device, batch_size=5, max_workers=1):
         self.vlm_processor = vlm_processor
         self.vlm_model = vlm_model
         self.device=device
         self.batch_size = batch_size
         self.max_workers = max_workers
 
-    # def process_page_batch(self, page_batch: List[Tuple[int, Any]]) -> List[str]:
-    #     print("process_page_batch called with", len(page_batch), "pages")  # <--- Add this
-    #     results = []
-    #     vlm_prompt = (
-    #         "[INST] Extract all visible text, tables (format as markdown tables), "
-    #         "and describe any images, figures, or charts from this document page. "
-    #         "Preserve the structure and formatting. [/INST]"
-    #     )
-    #     for page_num, page_img in page_batch:
-    #         print(f"Processing page {page_num} in process_page_batch")  # Optional debug
-    #         try:
-    #             import torch
-    #             inputs = self.vlm_processor(
-    #                 text=vlm_prompt,
-    #                 images=[page_img],
-    #                 return_tensors="pt"
-    #             ).to(self.vlm_model.device)
-    #             with torch.no_grad():
-    #                 generation = self.vlm_model.generate(
-    #                     **inputs,
-    #                     max_new_tokens=512,
-    #                     do_sample=True,
-    #                     temperature=0.1
-    #                 )
-    #             page_text = self.vlm_processor.decode(
-    #                 generation[0],
-    #                 skip_special_tokens=True
-    #             )
-    #             print(f"VLM output for page {page_num}:", repr(page_text))  # <--- ADD THIS
-    #             results.append(f"--- PAGE {page_num} (VLM) ---\n{page_text}\n\n")
-    #             del inputs, generation
-    #             if hasattr(torch, 'cuda') and torch.cuda.is_available():
-    #                 torch.cuda.empty_cache()
-    #         except Exception as page_error:
-    #             try:
-    #                 import pytesseract
-    #                 ocr_text = pytesseract.image_to_string(page_img)
-    #                 results.append(f"--- PAGE {page_num} (OCR Fallback) ---\n{ocr_text}\n\n")
-    #             except:
-    #                 results.append(f"--- PAGE {page_num} (FAILED) ---\n[Page processing failed]\n\n")
-    #     return results
-
-
     def process_page_batch(self, page_batch: List[Tuple[int, Any]]) -> List[str]:
         print(f"VLM + OCR process_page_batch STARTING with {len(page_batch)} pages")  #TRYING
         results = []
         for page_num, page_img in page_batch:
-        #     # If you want to process multiple images, make a list here:
-        #     images = [page_img]  # Or more images if you have them for this page
-        #     num_images = len(images)
-        #     image_tokens = " ".join(["<image>"] * num_images)
-        #     vlm_prompt = (f"""[INST] {image_tokens}
+            # If you want to process multiple images, make a list here:
+            images = [page_img]  # Or more images if you have them for this page
+            num_images = len(images)
+            image_tokens = " ".join(["<image>"] * num_images)
+            vlm_prompt = (f"""[INST] {image_tokens}
 
-        #     Analyze this document page.
+            Analyze this document page.
             
-        #     1. Extract important visible text exactly as written whenever possible.
-        #     2. Describe diagrams, figures, charts, and images.
-        #     3. Summarize tables and their key contents.
-        #     4. Do not repeat information.
-        #     5. Do not invent information that is not visible.
-        #     6. If text is unreadable, say so instead of guessing.
+            1. Extract important visible text exactly as written whenever possible.
+            2. Describe diagrams, figures, charts, and images.
+            3. Summarize tables and their key contents.
+            4. Do not repeat information.
+            5. Do not invent information that is not visible.
+            6. If text is unreadable, say so instead of guessing.
             
-        #     Provide a concise structured description of the page.
+            Provide a concise structured description of the page.
             
-        #     [/INST]"""
-        #     )
+            [/INST]"""
+            )
             
             vlm_output = None
             ocr_output = None
 
-            # VLM extraction (try/catch)            
-            # try:
-            #     print(f"Processing page {page_num} with VLM...") #TRYING
-            #     import torch  
-            #     import time 
+            #VLM extraction (try/catch)            
+            try:
+                print(f"Processing page {page_num} with VLM...") #TRYING     
+                                 
+                print("Torch CUDA:", torch.cuda.is_available())
+                print(
+                    "GPU Name:",
+                    torch.cuda.get_device_name(0)
+                    if torch.cuda.is_available()
+                    else "No GPU"
+                )
+                print("Torch version:", torch.__version__) 
+                print(
+                    "Model device:",
+                    next(self.vlm_model.parameters()).device
+                )   
+                processor_start = time.time()
                 
-            #     print("Torch CUDA:", torch.cuda.is_available())
-            #     print(
-            #         "GPU Name:",
-            #         torch.cuda.get_device_name(0)
-            #         if torch.cuda.is_available()
-            #         else "No GPU"
-            #     )
-            #     print("Torch version:", torch.__version__) 
-            #     print(
-            #         "Model device:",
-            #         next(self.vlm_model.parameters()).device
-            #     )   
-            #     processor_start = time.time()
-                
-            #     print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
+                print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
                             
-            #     inputs = self.vlm_processor(
-            #         text=vlm_prompt,
-            #         images=images,
-            #         return_tensors="pt"
-            #     ).to(self.device)
-            #     print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
-            #     print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
-            #     with torch.no_grad():
-            #         print("Starting model generation...") #TRYING
+                inputs = self.vlm_processor(
+                    text=vlm_prompt,
+                    images=images,
+                    return_tensors="pt"
+                ).to(self.device)
+                print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
+                print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
+                with torch.no_grad():
+                    print("Starting model generation...") #TRYING
                     
                     
-            #         start = time.time()
+                    start = time.time()
                     
-            #         generation = self.vlm_model.generate(
-            #             **inputs,
-            #             max_new_tokens=256,
-            #             do_sample=False
-            #         )
+                    generation = self.vlm_model.generate(
+                        **inputs,
+                        max_new_tokens=256,
+                        do_sample=False
+                    )
                     
-            #         print(f"Generation took {time.time()-start:.2f} seconds")
+                    print(f"Generation took {time.time()-start:.2f} seconds")
                     
                     
-            #     print("Generation completed")
-            #     #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
-            #     # page_text = self.vlm_processor.decode(
-            #     #     generation[0],
-            #     #     skip_special_tokens=True
+                print("Generation completed")
+                #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
+                # page_text = self.vlm_processor.decode(
+                #     generation[0],
+                #     skip_special_tokens=True
                 
-            #     generated_text = self.vlm_processor.batch_decode(
-            #         generation,
-            #         skip_special_tokens=True
-            #     )
+                generated_text = self.vlm_processor.batch_decode(
+                    generation,
+                    skip_special_tokens=True
+                )
 
-            #     vlm_output = generated_text[0]
-            #     if '[/INST]' in vlm_output:
-            #         vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
-            #         # page_text = page_text.split('[/INST]', 1)[1].strip()
-            #     print(f"VLM output for page {page_num}:", repr(vlm_output))
-            #     del inputs, generation
-            #     if hasattr(torch, 'cuda') and torch.cuda.is_available():
-            #         torch.cuda.empty_cache()
-            #         print("CUDA memory cleared") #TRYING
-            # except Exception as page_error:
-            #     print(f"VLM failed for page {page_num}: {page_error}")
+                vlm_output = generated_text[0]
+                if '[/INST]' in vlm_output:
+                    vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
+                    # page_text = page_text.split('[/INST]', 1)[1].strip()
+                print(f"VLM output for page {page_num}:", repr(vlm_output))
+                del inputs, generation
+                if hasattr(torch, 'cuda') and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    print("CUDA memory cleared") #TRYING
+            except Exception as page_error:
+                print(f"VLM failed for page {page_num}: {page_error}")
                 
-            
-            
-                
+                 
             # OCR extraction (always runs for visual pages)
             try:
-                import pytesseract
                 custom_config = r'--oem 3 --psm 6'
 
                 ocr_output = pytesseract.image_to_string(
@@ -389,20 +340,22 @@ class BatchVLMProcessor:
                 print(f"OCR failed for page {page_num}: {ocr_error}")
 
             # Combine both outputs for hybrid chunk
-            # combined = f"--- PAGE {page_num} (VLM) ---\n"
-            # if vlm_output:
-            #     combined += vlm_output + "\n\n"
-            # else:
-            #     combined += "[VLM processing failed]\n\n"
-            # combined += f"--- PAGE {page_num} (OCR) ---\n"
-            
-            combined = ""
-            combined += f"--- PAGE {page_num+1} (OCR) ---\n"
-            if ocr_output and ocr_output.strip():
-                combined += ocr_output.strip() + "\n\n"
-            else:
-                combined += "[OCR processing failed or empty]\n\n"
+            combined = f"--- PAGE {page_num+1} ---\n\n"
 
+            combined += "[VLM]\n"
+            
+            if vlm_output and vlm_output.strip():
+                combined += vlm_output.strip() + "\n\n"
+            else:
+                combined += "[VLM processing failed or empty]\n\n"
+            
+            combined += "[OCR]\n"
+            
+            if ocr_output and ocr_output.strip():
+                combined += ocr_output.strip() + "\n"
+            else:
+                combined += "[OCR processing failed or empty]\n"
+            
             results.append(combined)   
                 
         print(f"VLM process_page_batch COMPLETED. Generated {len(results)} page results.")  #TRYING
@@ -411,7 +364,6 @@ class BatchVLMProcessor:
     def process_pdf_parallel(self, file_path: Path, visual_pages: List[int] = None) -> Dict[str, Any]:
         print(f"Starting process_pdf_parallel for {file_path}, visual_pages: {visual_pages}")  #TRYING
         try:
-            import torch
             import fitz  # PyMuPDF
             import numpy as np
             from PIL import Image
@@ -566,7 +518,7 @@ class BatchVLMProcessor:
 
 # ====== SMART DOCUMENT PROCESSOR WITH ROBUST FALLBACKS ======
 class SmartDocumentProcessor:
-    def __init__(self, llm, vlm_processor=None, vlm_model=None, batch_size=5, max_workers=3):
+    def __init__(self, llm, vlm_processor=None, vlm_model=None, batch_size=5, max_workers=1):
         self.llm = llm
         self.vlm_processor = vlm_processor
         self.vlm_model = vlm_model
@@ -587,63 +539,7 @@ class SmartDocumentProcessor:
                     self.temp_dirs.remove(temp_dir)
             except Exception as e:
                 pass
-
-    # def extract_text_smart(self, file_path: str) -> Dict[str, Any]:
-    #     file_path = Path(file_path)
-    #     file_ext = file_path.suffix.lower()
-    #     result = {
-    #         "text": "",
-    #         "extraction_method": None,
-    #         "success": False,
-    #         "error": None,
-    #         "file_type": file_ext,
-    #         "has_visual_content": False,
-    #         "visual_detection": {},
-    #         "word_count": 0,
-    #         "pages": 1,
-    #         "processing_time": 0,
-    #     }
-    #     t0 = time.time()
-    #     try:
-    #         visual_analysis = has_visual_content_comprehensive(str(file_path))
-    #         result["has_visual_content"] = visual_analysis["has_visuals"]
-    #         result["visual_detection"] = visual_analysis
-    #         if visual_analysis["has_visuals"] and self.batch_processor:
-    #             extraction = self._extract_with_batch_vlm(file_path)
-    #         else:
-    #             extraction = self._extract_standard(file_path)
-    #         result.update(extraction)
-    #         print("Extracted text from extractor:", result.get("text", "")[:500])
-    #         if "pages" not in result or not result["pages"]:
-    #             if file_ext == ".pdf":
-    #                 result["pages"] = get_pdf_page_count(file_path)
-    #             elif file_ext == ".docx":
-    #                 result["pages"] = get_docx_page_estimate(result.get("text", ""))
-    #             elif file_ext == ".txt":
-    #                 lines = result.get("text", "").count('\n')
-    #                 result["pages"] = max(1, lines // 50)
-    #             else:
-    #                 result["pages"] = 1
-    #         result["processing_time"] = round(time.time() - t0, 2)
-    #         result["success"] = extraction.get("success", False)
-    #     except Exception as e:
-    #         result["error"] = str(e)
-    #     return result
-
-    # def _extract_with_batch_vlm(self, file_path: Path) -> Dict[str, Any]:
-    #     try:
-    #         if not self.batch_processor:
-    #             return {"success": False, "error": "Batch VLM processor not configured"}
-    #         if file_path.suffix.lower() == '.pdf':
-    #             return self.batch_processor.process_pdf_parallel(file_path)
-    #         elif file_path.suffix.lower() == '.docx':
-    #             return self._extract_standard(file_path)
-    #         else:
-    #             return {"success": False, "error": "Batch VLM not supported for this file type"}
-    #     except Exception as e:
-    #         return self._extract_standard(file_path)
-    
-    
+        
     def extract_text_smart(self, file_path: str) -> Dict[str, Any]:
         file_path = Path(file_path)
         file_ext = file_path.suffix.lower()
@@ -714,7 +610,7 @@ class SmartDocumentProcessor:
 
             if file_path.suffix.lower() == '.pdf':
                 # Get visual pages information
-                print("Getting visual pages information...") #TRYING
+                logger.info("Getting visual pages information...")
                 visual_info = has_visual_metadata_pdf(str(file_path))
                 visual_pages = visual_info.get("visual_pages", [])
 
@@ -1143,8 +1039,6 @@ class HallucinationResistantAnswerer:
             f"--- PAGE {chunk['page']} ---\n{chunk['content']}"
             for chunk in context_chunks
         )
-        
-        import re
 
         # Extract unique page numbers from retrieved chunks
         page_numbers = set()
@@ -1354,7 +1248,7 @@ def document_extractor(state: QAState) -> QAState:
             vlm_processor=vlm_processor,  # Replace with your VLM processor
             vlm_model=vlm_model,  # Replace with your VLM model
             batch_size=5,  # Adjust based on your memory constraints
-            max_workers=3   # Adjust based on your CPU/GPU resources
+            max_workers=1   # Adjust based on your CPU/GPU resources
         )
 
         extraction_result = processor.extract_text_smart(state["file_path"])
@@ -1568,7 +1462,7 @@ def create_multiagent_workflow():
     return workflow.compile()
 
 def run_document_qa_system(file_path: str, llm=None, vlm_processor=None, vlm_model=None, 
-                          batch_size=5, max_workers=3):
+                          batch_size=5, max_workers=1):
     """Main function to run the enhanced document Q&A system with metadata-based visual detection."""
     print(f"🚀 Enhanced Multi-Agent Document Q&A System")
     print(f"📄 Processing: {file_path}")
@@ -1625,24 +1519,22 @@ if __name__ == "__main__":
 
     file_path = sys.argv[1]
     batch_size = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-    max_workers = int(sys.argv[3]) if len(sys.argv) > 3 else 3
+    max_workers = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
     # Initialize your actual models here
     from langchain_google_genai import ChatGoogleGenerativeAI
     from transformers import AutoProcessor, AutoModelForVision2Seq
-
-    import torch
     
     llm = ChatGoogleGenerativeAI(model='gemini-3.1-flash-lite', google_api_key=GEMINI_API_KEY)
     vlm_processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
-    vlm_model = AutoModelForVision2Seq.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY)
+    vlm_model = AutoModelForVision2Seq.from_pretrained("HuggingFaceTB/SmolVLM-256M-Instruct",token=HUGGINGFACE_API_KEY ,torch_dtype=torch.float16)
     
     device = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     print(f"Using device: {device}")
     vlm_model = vlm_model.to(device)
-
+    
     # Expose models globally for agent functions
     globals()["llm"] = llm
     globals()["vlm_processor"] = vlm_processor
