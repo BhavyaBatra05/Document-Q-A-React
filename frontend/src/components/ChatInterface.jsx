@@ -27,6 +27,11 @@ function ChatInterface({
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasDocument, setHasDocument] = useState(!!activeDocument);
+  const loginTime = localStorage.getItem("login_time");
+  const formattedLoginTime =
+      loginTime
+          ? new Date(loginTime).toLocaleString()
+          : "Unknown";
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -200,7 +205,7 @@ function ChatInterface({
         </div>
         <div className="header-right">
           <span className="user-info">Logged in: {user.username}</span>
-          <span className="timestamp">Login Time: {new Date().toLocaleString()}</span>
+          <span className="timestamp">Login Time: {formattedLoginTime}</span>
           {user && (
             <button className="btn btn-secondary" onClick={onShowAdmin}>
               👨‍💼 Admin
@@ -259,12 +264,12 @@ function ChatInterface({
           </div>
 
           {/* Preset queries only show if demo mode active AND chat fresh */}
-          {isDemoMode && messages.length === 1 && messages[0].content === BOT_GREETING.content && (
+          {isDemoMode && (
             <div className="preset-queries" style={{ marginBottom: "1rem", display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {[
                 "What are the 2024 sales figures?",
                 "Which region has the highest sales?",
-                "Describe the bar chart in the document.",
+                "Describe the chart in the document.",
                 "Sort the continents in ascending order."
               ].map((query, idx) => (
                 <button key={idx} onClick={() => handleSendMessage(query)} className="btn btn-secondary">

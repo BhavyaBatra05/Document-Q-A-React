@@ -17,6 +17,7 @@ class ApiService {
     this.token = data.access_token;
     localStorage.setItem('access_token', this.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem("login_time", new Date().toISOString());
     return data;
   }
 
@@ -32,6 +33,7 @@ class ApiService {
       this.token = null;
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
+      localStorage.removeItem("login_time");
     }
   }
 

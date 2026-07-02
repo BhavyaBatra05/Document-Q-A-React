@@ -249,14 +249,6 @@ const AdminDashboard = ({ user, onBackToChat, onLogout, onActiveDocumentChange})
     }
   };
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   const handleLogout = async () => {
     try {
       await apiService.logout();
@@ -264,10 +256,6 @@ const AdminDashboard = ({ user, onBackToChat, onLogout, onActiveDocumentChange})
     } catch (error) {
       onLogout();
     }
-  };
-
-  const getCurrentTimestamp = () => {
-    return new Date().toLocaleString();
   };
 
   return (
@@ -283,7 +271,7 @@ const AdminDashboard = ({ user, onBackToChat, onLogout, onActiveDocumentChange})
         </div>
         <div className="header-right">
           <span className="user-info">Logged in: {user?.username || 'Unknown'}</span>
-          <span className="timestamp">Login Time: {getCurrentTimestamp()}</span>
+          <span className="timestamp">Login Time: {formattedLoginTime}</span>
           <button className="btn btn-secondary" onClick={onBackToChat}>👤 User</button>
           <button className="btn btn-logout" onClick={handleLogout}>🚪 Logout</button>
         </div>

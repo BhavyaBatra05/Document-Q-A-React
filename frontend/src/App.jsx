@@ -16,12 +16,17 @@ function App() {
   
 
   // Initialize isDemoMode to false
-  const { isDemoMode, setIsDemoMode } = useContext(DemoModeContext);
+  const { isDemoMode} = useContext(DemoModeContext);
 
-  console.log(`[App] Render - currentView: ${currentView}, user: ${user?.username}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[App] Render - currentView: ${currentView}, user: ${user?.username}`);
+  }
+
 
   useEffect(() => {
-  console.log("DemoModeProvider: isDemoMode changed", isDemoMode);
+    if (process.env.NODE_ENV === "development") {
+      console.log("DemoModeProvider: isDemoMode changed", isDemoMode);
+    }
   }, [isDemoMode]);
 
   
@@ -34,28 +39,17 @@ function App() {
         if (storedUser && token) {
           const userJson = JSON.parse(storedUser);
           setUser(userJson);
+          if (userJson.is_admin) {
+            setCurrentView("admin");
+        } else {
+            setCurrentView("chat");
+        }
 
           const sessionsResp = await apiService.getChatSessions();
           if (sessionsResp.sessions?.length > 0) {
             setChatSessions(sessionsResp.sessions);
             setActiveSessionId(sessionsResp.sessions[0].sessionId);
           } else {
-            // // Create first session only IF none exist
-            // const newSessionId = `chat_${Date.now()}`;
-            // setChatSessions([
-            //   {
-            //     sessionId: newSessionId,
-            //     createdAt: new Date(),
-            //     messages: [
-            //       {
-            //         role: "assistant",
-            //         content: "Hello! I'm your document assistant. How can I help you today?",
-            //         timestamp: new Date().toISOString(),
-            //       },
-            //     ],
-            //   },
-            // ]);
-            // setActiveSessionId(newSessionId);
             createInitialChat();
           }
         }
@@ -96,7 +90,11 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     createInitialChat();
-    setCurrentView("chat");
+    if (userData.is_admin) {
+      setCurrentView("admin");
+  }else {
+      setCurrentView("chat");
+  }
   };
 
   const handleLogout = () => {

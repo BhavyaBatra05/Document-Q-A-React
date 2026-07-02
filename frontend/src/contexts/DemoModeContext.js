@@ -18,7 +18,7 @@ export const DemoModeProvider = ({ children }) => {
 
   useEffect(() => {
     console.log(`[DemoModeProvider] isDemoMode changed: ${isDemoMode}`);
-    localStorage.setItem("isDemoMode", isDemoMode);
+    localStorage.setItem("isDemoMode", String(isDemoMode));
   }, [isDemoMode]);
 
   return (

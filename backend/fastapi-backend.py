@@ -7,18 +7,15 @@ Maintains exact same functionality as Streamlit version but with REST API endpoi
 import os
 import tempfile
 import shutil
-import asyncio
 import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import json
-import time
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks, Form, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -28,9 +25,7 @@ import uvicorn
 from enhanced_doc_qa import (
     SmartDocumentProcessor,
     InMemoryVectorStore, 
-    HallucinationResistantAnswerer,
-    QAState,
-    create_multiagent_workflow
+    HallucinationResistantAnswerer
 )
 
 # Load environment variables
@@ -56,7 +51,7 @@ demo_ingestion_tasks = {}
 
 # Verify demo files exist
 for key, path in DEMO_FILES.items():
-    print(f"{key} at {path}: exists={os.path.exists(path)} size={os.path.getsize(path) if os.path.exists(path) else 'N/A'}")
+    logger.info(f"{key} at {path}: exists={os.path.exists(path)} size={os.path.getsize(path) if os.path.exists(path) else 'N/A'}")
 
 
 @asynccontextmanager
@@ -363,9 +358,6 @@ async def upload_document(
 ):
     """Upload and process document"""
     
-    # if not session["is_admin"]:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
@@ -375,7 +367,6 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Unsupported file format")
     
     # Check file size (200MB limit as per UI)
-    file_size = 0
     content = await file.read()
     file_size = len(content)
     
@@ -414,23 +405,6 @@ async def upload_document(
         "filename": file.filename,
         "size": file_size
     }
-
-# process_document async task as-is ...
-
-# @app.get("/api/documents/processing-status/{task_id}")
-# async def get_processing_status(task_id: str):
-#     """Get document processing status"""
-    
-#     task = processing_tasks.get(task_id)
-#     if not task:
-#         raise HTTPException(status_code=404, detail="Task not found")
-    
-#     return ProcessingStatus(
-#         status=task["status"],
-#         progress=task["progress"],
-#         message=task["message"],
-#         details=task.get("details")
-#     )
 
 @app.get("/api/documents/processing-status/{task_id}")
 async def get_processing_status(task_id: str):
@@ -630,8 +604,6 @@ async def general_exception_handler(request, exc):
         status_code=500,
         content={"error": "Internal server error", "status_code": 500}
     )
-
-from fastapi import BackgroundTasks
 
 @app.post("/api/documents/demo_ingest/{task_id}")
 async def demo_ingest_document(task_id: str, background_tasks: BackgroundTasks, session: dict = Depends(verify_session)):

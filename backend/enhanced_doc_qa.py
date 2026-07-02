@@ -1,7 +1,5 @@
 # IN THIS CODE VLM WORKS ON PAGES WITH VISUALS AND ON OTHER PAGES STANDARD EXTRACTION IS USED
 
-
-
 """
 Enhanced Multi-Agent Document Q&A System with Optimized VLM Batch Processing + Metadata Visual Detection
 
@@ -90,16 +88,6 @@ def get_pdf_page_count(file_path: Path) -> int:
 def get_docx_page_estimate(text: str) -> int:
     return max(1, len(text) // 1800)
 
-
-# def increment_page_numbers(text):
-#     """
-#     Replace all 'PAGE X' (where X is a number) with 'PAGE X+1' in the text.
-#     Example: 'This is on PAGE 0.' -> 'This is on PAGE 1.'
-#     """
-#     def repl(match):
-#         num = int(match.group(1))
-#         return f"PAGE {num+1}"
-#     return re.sub(r'PAGE (\d+)', repl, text)
 # ====== VISUAL CONTENT DETECTION ======
 
 def has_visual_metadata_pdf(file_path: str) -> dict:
@@ -116,8 +104,8 @@ def has_visual_metadata_pdf(file_path: str) -> dict:
             
             # Check for images in page
             has_images = len(images) > 0
-            if has_images: #TRYING
-                print(f"Page {page_num} has {len(images)} images") #TRYING
+            if has_images:
+                logger.debug(f"Page {page_num} has {len(images)} images")
             
             # Alternative check using page dictionary
             text_dict = page.get_text("dict")
@@ -125,39 +113,26 @@ def has_visual_metadata_pdf(file_path: str) -> dict:
             
             # Look for image blocks
             image_blocks = [b for b in blocks if b.get("type") == 1]  # Type 1 is image
-            if image_blocks: #TRYING
-                print(f"Page {page_num} has {len(image_blocks)} image blocks") #TRYING
+            if image_blocks:
+                print(f"Page {page_num} has {len(image_blocks)} image blocks")
 
             if has_images or image_blocks:
-                if page_num not in pages_with_visuals:  # Avoid duplicates #TRYING
+                if page_num not in pages_with_visuals:  # Avoid duplicates
                     pages_with_visuals.append(page_num)
                 
         doc.close()
-        print(f"Visual content detection complete: {len(pages_with_visuals)} pages have visuals") #TRYING
+        logger.info(f"Visual content detection complete: {len(pages_with_visuals)} pages have visuals")
         return {
             "has_visuals": bool(pages_with_visuals),
             "visual_pages": pages_with_visuals
         }
     except ImportError:
-        print("PyMuPDF (fitz) not installed")  #TRYING
+        logger.warning("PyMuPDF (fitz) not installed")
         return {"has_visuals": False, "visual_pages": []}
     except Exception as e:
-        print(f"Error detecting visuals: {e}")
+        logger.error(f"Error detecting visuals: {e}")
         return {"has_visuals": False, "visual_pages": []}
         
-        
-        
-        # has_actual_images = total_images > 0
-        # has_significant_drawings = total_drawings > (total_pages * 25)
-        # has_complex_layouts = total_complex_elements > 3
-        # if has_actual_images:
-        #     return True
-        # elif has_significant_drawings:
-        #     return True
-        # elif has_complex_layouts:
-        #     return True
-        # else:
-        #     return False
 
 def has_visual_metadata_docx(file_path: str) -> bool:
     try:
@@ -199,8 +174,6 @@ def has_visual_content_comprehensive(file_path: str) -> Dict[str, Any]:
     }
     try:
         if file_ext == '.pdf':
-            # has_visuals = has_visual_metadata_pdf(str(file_path))
-            # result["has_visuals"] = has_visuals
             visual_info = has_visual_metadata_pdf(str(file_path))
             result["has_visuals"] = visual_info["has_visuals"]
             result["confidence"] = 0.95 if visual_info["has_visuals"] else 0.9
@@ -234,7 +207,7 @@ class BatchVLMProcessor:
         self.max_workers = max_workers
 
     def process_page_batch(self, page_batch: List[Tuple[int, Any]]) -> List[str]:
-        print(f"VLM + OCR process_page_batch STARTING with {len(page_batch)} pages")  #TRYING
+        print(f"VLM + OCR process_page_batch STARTING with {len(page_batch)} pages")
         results = []
         for page_num, page_img in page_batch:
             # If you want to process multiple images, make a list here:
@@ -261,52 +234,29 @@ class BatchVLMProcessor:
             ocr_output = None
 
             #VLM extraction (try/catch)            
-            try:
-                print(f"Processing page {page_num} with VLM...") #TRYING     
-                                 
-                print("Torch CUDA:", torch.cuda.is_available())
-                print(
-                    "GPU Name:",
-                    torch.cuda.get_device_name(0)
-                    if torch.cuda.is_available()
-                    else "No GPU"
-                )
-                print("Torch version:", torch.__version__) 
-                print(
-                    "Model device:",
-                    next(self.vlm_model.parameters()).device
-                )   
-                processor_start = time.time()
-                
-                print("Image size:", images[0].size if isinstance(images, list) else images.size)#to be deleted
-                            
+            try:    
+                                           
                 inputs = self.vlm_processor(
                     text=vlm_prompt,
                     images=images,
                     return_tensors="pt"
-                ).to(self.device)
-                print(f"Processor took {time.time()-processor_start:.2f} seconds")#to be deleted 
-                print(f"Input tensor shape: {inputs['input_ids'].shape}") #TRYING
+                ).to(self.device) 
+                print(f"Input tensor shape: {inputs['input_ids'].shape}")
                 with torch.no_grad():
-                    print("Starting model generation...") #TRYING
+                    print("Starting model generation...")
                     
                     
                     start = time.time()
                     
                     generation = self.vlm_model.generate(
                         **inputs,
-                        max_new_tokens=256,
-                        do_sample=False
+                        max_new_tokens=180,
+                        do_sample=False,
+                        repetition_penalty=1.2,
+                        no_repeat_ngram_size=3
                     )
                     
-                    print(f"Generation took {time.time()-start:.2f} seconds")
-                    
-                    
                 print("Generation completed")
-                #     print(f"✅ Generation complete! Output shape: {generation.shape}") #TRYING
-                # page_text = self.vlm_processor.decode(
-                #     generation[0],
-                #     skip_special_tokens=True
                 
                 generated_text = self.vlm_processor.batch_decode(
                     generation,
@@ -316,12 +266,10 @@ class BatchVLMProcessor:
                 vlm_output = generated_text[0]
                 if '[/INST]' in vlm_output:
                     vlm_output = vlm_output.split('[/INST]', 1)[1].strip()
-                    # page_text = page_text.split('[/INST]', 1)[1].strip()
                 print(f"VLM output for page {page_num}:", repr(vlm_output))
                 del inputs, generation
                 if hasattr(torch, 'cuda') and torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                    print("CUDA memory cleared") #TRYING
             except Exception as page_error:
                 print(f"VLM failed for page {page_num}: {page_error}")
                 
@@ -358,14 +306,13 @@ class BatchVLMProcessor:
             
             results.append(combined)   
                 
-        print(f"VLM process_page_batch COMPLETED. Generated {len(results)} page results.")  #TRYING
+        print(f"VLM process_page_batch COMPLETED. Generated {len(results)} page results.")
         return results
     
     def process_pdf_parallel(self, file_path: Path, visual_pages: List[int] = None) -> Dict[str, Any]:
-        print(f"Starting process_pdf_parallel for {file_path}, visual_pages: {visual_pages}")  #TRYING
+        print(f"Starting process_pdf_parallel for {file_path}, visual_pages: {visual_pages}")
         try:
             import fitz  # PyMuPDF
-            import numpy as np
             from PIL import Image
 
             # Get total pages using PyMuPDF instead of pdf2image
@@ -382,7 +329,7 @@ class BatchVLMProcessor:
                 for i, page in enumerate(reader.pages):
                     page_text = page.extract_text() or ""
                     text_content[i] = f"--- PAGE {i+1} (Text) ---\n{page_text}\n\n"
-                    print(f"Standard extraction for page {i+1}: {len(page_text)} chars")  #TRYING
+                    print(f"Standard extraction for page {i+1}: {len(page_text)} chars")
             except Exception as e:
                 print(f"Standard text extraction failed: {e}")
                 # Create empty placeholders if text extraction fails
@@ -416,7 +363,7 @@ class BatchVLMProcessor:
 
                 # Group consecutive pages for efficient conversion
                 if not batch_indices:
-                    print("Empty batch indices, skipping...") #TRYING
+                    print("Empty batch indices, skipping...")
                     continue
 
                 try:
@@ -434,7 +381,7 @@ class BatchVLMProcessor:
                             # Convert pixmap to PIL Image
                             img_data = pix.samples
                             img = Image.frombytes("RGB", [pix.width, pix.height], img_data)
-                            print(f"Created image for page {page_idx}: {img.size}") #TRYING
+                            print(f"Created image for page {page_idx}: {img.size}")
 
                             current_batch.append((page_idx, img))
                             if len(current_batch) >= self.batch_size:
@@ -445,11 +392,11 @@ class BatchVLMProcessor:
                     if current_batch:
                         page_batches.append(current_batch)
 
-                    print(f"Created {len(page_batches)} batches for processing") #TRYING
+                    print(f"Created {len(page_batches)} batches for processing")
 
                     # Process batches in parallel
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                        print(f"Starting ThreadPoolExecutor with {self.max_workers} workers") #TRYING
+                        print(f"Starting ThreadPoolExecutor with {self.max_workers} workers")
                         future_to_batch = {
                             executor.submit(self.process_page_batch, batch): batch
                             for batch in page_batches
@@ -458,14 +405,14 @@ class BatchVLMProcessor:
                         for future in as_completed(future_to_batch):
                             batch = future_to_batch[future]
                             try:
-                                print(f"Waiting for batch result...") #TRYING
+                                print(f"Waiting for batch result...")
                                 batch_results = future.result()
                                 # Update results for these pages
                                 for i, (page_idx, _) in enumerate(batch):
                                     if i < len(batch_results):
                                         text_content[page_idx] = batch_results[i]
                                         processed_pages += 1
-                                        print(f"Updated text content for page {page_idx}") #TRYING
+                                        print(f"Updated text content for page {page_idx}")
                             except Exception as exc:
                                 print(f"Batch processing failed: {exc}")
                                 for page_idx, _ in batch:
@@ -473,7 +420,7 @@ class BatchVLMProcessor:
 
                     # Clean up
                     gc.collect()
-                    print("Garbage collection completed") #TRYING
+                    print("Garbage collection completed")
 
                 except Exception as chunk_error:
                     print(f"Exception processing visual pages {batch_indices}: {chunk_error}")
@@ -481,7 +428,7 @@ class BatchVLMProcessor:
 
             # Close the document
             doc.close()
-            print("Closed PDF document") #TRYING
+            print("Closed PDF document")
 
             # Combine all text in page order
             extracted_text = ""
@@ -492,7 +439,7 @@ class BatchVLMProcessor:
 
             if not extracted_text.strip() or len(extracted_text.strip()) < 50:
                 # Modified fallback without OCR
-                print("Extracted text is too short or empty") #TRYING
+                print("Extracted text is too short or empty")
                 return {
                     "text": "Text extraction failed. Please try another file format.",
                     "extraction_method": "failed",
@@ -513,7 +460,7 @@ class BatchVLMProcessor:
                 "processing_time": 0,
             }
         except Exception as e:
-            print(f"Hybrid VLM processing failed: {str(e)}") #TRYING
+            print(f"Hybrid VLM processing failed: {str(e)}")
             return {"success": False, "error": f"Hybrid VLM processing failed: {str(e)}"}
 
 # ====== SMART DOCUMENT PROCESSOR WITH ROBUST FALLBACKS ======
@@ -537,7 +484,7 @@ class SmartDocumentProcessor:
                 shutil.rmtree(temp_dir)
                 if temp_dir in self.temp_dirs:
                     self.temp_dirs.remove(temp_dir)
-            except Exception as e:
+            except Exception:
                 pass
         
     def extract_text_smart(self, file_path: str) -> Dict[str, Any]:
@@ -563,7 +510,7 @@ class SmartDocumentProcessor:
     
             # 🚩 PATCH START: DOCX to PDF + VLM for visuals
             if file_ext == ".docx" and visual_analysis["has_visuals"]:
-                print("DOCX detected with visuals; converting to PDF for VLM extraction.")
+                logger.info("DOCX detected with visuals; converting to PDF for VLM extraction.")
                 with self.temporary_directory() as temp_dir:
                     pdf_path = Path(temp_dir) / (file_path.stem + ".pdf")
                     success, error = convert_docx_to_pdf_cross_platform(file_path, pdf_path)
@@ -571,7 +518,7 @@ class SmartDocumentProcessor:
                         extraction = self._extract_with_batch_vlm(pdf_path)
                         extraction["extraction_method"] = "docx->pdf+hybrid_vlm_text"
                     else:
-                        print(f"Failed to convert DOCX to PDF: {error}")
+                        logger.warning(f"Failed to convert DOCX to PDF: {error}")
                         extraction = self._extract_standard(file_path)
             else:
                 # Existing logic for PDF, DOCX (no visuals), TXT, etc.
@@ -602,10 +549,10 @@ class SmartDocumentProcessor:
         return result
     
     def _extract_with_batch_vlm(self, file_path: Path) -> Dict[str, Any]:
-        print(f"Starting _extract_with_batch_vlm for file: {file_path}") #TRYING
+        print(f"Starting _extract_with_batch_vlm for file: {file_path}")
         try:
             if not self.batch_processor:
-                print("Batch processor not configured!") #TRYING
+                print("Batch processor not configured!")
                 return {"success": False, "error": "Batch VLM processor not configured"}
 
             if file_path.suffix.lower() == '.pdf':
@@ -618,29 +565,29 @@ class SmartDocumentProcessor:
 
                 # Process with optimized approach
                 
-                print("Calling batch processor process_pdf_parallel...") #TRYING
+                print("Calling batch processor process_pdf_parallel...")
                 
                 out = self.batch_processor.process_pdf_parallel(file_path, visual_pages=visual_pages)
-                print(f"Extracted text in _extract_with_batch_vlm: {len(out.get('text', ''))} chars")   #TRYING
+                print(f"Extracted text in _extract_with_batch_vlm: {len(out.get('text', ''))} chars")
                 return out
 
             elif file_path.suffix.lower() == '.docx':
 
-                print("Processing docx with standard extraction") #TRYING
+                print("Processing docx with standard extraction")
 
                 out = self._extract_standard(file_path)
-                print(f"Extracted text in _extract_with_batch_vlm: {len(out.get('text', ''))} chars")   #TRYING
+                print(f"Extracted text in _extract_with_batch_vlm: {len(out.get('text', ''))} chars")
                 return out
 
             else:
-                print(f"Unsupported file type: {file_path.suffix.lower()}") #TRYING
+                print(f"Unsupported file type: {file_path.suffix.lower()}")
                 
                 return {"success": False, "error": "Batch VLM not supported for this file type"}
 
         except Exception as e:
             print(f"Exception in _extract_with_batch_vlm: {e}")
             out = self._extract_standard(file_path)
-            print(f"Extracted text in _extract_with_batch_vlm (exception): {len(out.get('text', ''))} chars")   #TRYING
+            print(f"Extracted text in _extract_with_batch_vlm (exception): {len(out.get('text', ''))} chars")
             return out  
 
     def _extract_standard(self, file_path: Path) -> Dict[str, Any]:
@@ -717,18 +664,18 @@ class SmartDocumentProcessor:
                         text_dict = page.get_text("dict")
                         blocks = text_dict.get("blocks", [])
                         page_text = "\n".join([block.get("text", "") for block in blocks if "text" in block])
-                except:
+                except Exception:
                     page_text = ""
     
                 extracted_text += f"--- PAGE {i+1} (PyMuPDF) ---\n{page_text}\n\n"
-    
+            page_count = len(doc)
             doc.close()
             return {
                 "text": extracted_text,
                 "extraction_method": "pymupdf",
                 "success": True,
                 "word_count": len(extracted_text.split()),
-                "pages": len(doc),
+                "pages": page_count,
             }
         except Exception as e:
             return {"success": False, "error": f"PyMuPDF extraction failed: {str(e)}"}
@@ -824,7 +771,7 @@ class SmartDocumentProcessor:
                 if os.path.exists(temp_dir):
                     shutil.rmtree(temp_dir)
                     self.temp_dirs.remove(temp_dir)
-            except Exception as e:
+            except Exception:
                 pass
 
 # ====== Paste your InMemoryVectorStore, HallucinationResistantAnswerer, agent functions, and main workflow below ======
@@ -1041,8 +988,6 @@ class HallucinationResistantAnswerer:
         )
 
         # Extract unique page numbers from retrieved chunks
-        page_numbers = set()
-
         page_numbers = sorted(
             {
                 chunk["page"]
@@ -1369,7 +1314,7 @@ def query_answerer(state: QAState) -> QAState:
         # Put this check first
         if not state["vectorstore"]:
             state["answer"] = (
-                "Vector index was not created because extraction didn’t yield enough usable text. "
+                "Vector index was not created because extraction didn't yield enough usable text. "
                 "For PDFs, enable VLM and/or install OCR dependencies (tesseract-ocr, poppler-utils, "
                 "pdf2image, pytesseract). For DOCX tables, use the table-aware extractor. Then retry."
             )
@@ -1378,7 +1323,6 @@ def query_answerer(state: QAState) -> QAState:
 
         # Normal path continues here
         chunks = state["vectorstore"].retrieve_chunks(state["query"], k=6)
-        # chunks = [increment_page_numbers(chunk) for chunk in chunks]
         
         state["retrieved_chunks"] = chunks
 
@@ -1492,8 +1436,7 @@ def run_document_qa_system(file_path: str, llm=None, vlm_processor=None, vlm_mod
         extraction_method="",
         word_count=0,
         chunk_count=0,
-        next_action="continue",
-        # original_file_name=os.path.basename(file_path)
+        next_action="continue"
     )
 
     # Create and run workflow

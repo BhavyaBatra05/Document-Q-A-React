@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import apiService from '../services/api-service';
 import '../styles/App.css';
 import logo from '../assets/logo.png';
@@ -77,9 +77,6 @@ const Login = ({ onLogin }) => {
                                 required
                                 disabled={loading}
                             />
-                        </div>
-                        
-                        <div className="form-group">
                         </div>
                         
                         {error && <div className="error-message">{error}</div>}
